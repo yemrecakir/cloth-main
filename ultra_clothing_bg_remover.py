@@ -82,8 +82,14 @@ class UltraClothingBgRemover:
         
         # Hiçbiri çalışmazsa son çare
         print("⚠️  Premium modeller yüklenemedi, varsayılan kullanılıyor...")
-        self.session = new_session('u2net')
-        self.best_model = 'u2net'
+        try:
+            self.session = new_session('u2net')
+            self.best_model = 'u2net'
+            print("✅ u2net modeli fallback olarak yüklendi")
+        except Exception as e:
+            print(f"❌ KRITIK: u2net modeli bile yüklenemedi: {e}")
+            self.session = None
+            self.best_model = 'simple_ultra'
     
     def intelligent_preprocessing(self, image_path):
         """
@@ -132,6 +138,11 @@ class UltraClothingBgRemover:
             print(f"\n🚀 ULTRA İŞLEM: {os.path.basename(input_path)}")
             print(f"🤖 Model: {self.best_model}")
             
+            # Session kontrolü
+            if self.session is None:
+                print("⚠️  Rembg session bulunamadı, basit işlem yapılıyor...")
+                return self.simple_background_removal(input_path, output_path)
+            
             start_time = time.time()
             
             # Akıllı ön işleme
@@ -165,6 +176,38 @@ class UltraClothingBgRemover:
             
         except Exception as e:
             print(f"❌ Ultra işlem hatası: {e}")
+            # Fallback olarak basit işlem dene
+            print("🔄 Fallback basit işlem deneniyor...")
+            return self.simple_background_removal(input_path, output_path)
+    
+    def simple_background_removal(self, input_path, output_path=None):
+        """
+        Basit arka plan kaldırma - session olmadan
+        """
+        try:
+            print(f"🔧 Basit işlem: {os.path.basename(input_path)}")
+            
+            # Session olmadan varsayılan modeli kullan
+            with open(input_path, 'rb') as f:
+                input_data = f.read()
+            
+            # Varsayılan rembg kullan
+            output_data = remove(input_data)
+            
+            # Çıktı dosyası
+            if output_path is None:
+                input_file = Path(input_path)
+                output_path = input_file.parent / f"{input_file.stem}_ultra_bg_removed.png"
+            
+            # Kaydet
+            with open(output_path, 'wb') as f:
+                f.write(output_data)
+            
+            print(f"✅ Basit işlem tamamlandı: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            print(f"❌ Basit işlem de başarısız: {e}")
             return None
     
     def ai_positioning(self, image_path, output_path=None, mode='smart'):

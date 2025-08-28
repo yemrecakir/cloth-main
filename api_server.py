@@ -483,7 +483,22 @@ def remove_background_base64():
             }), 400
         
         # Base64'ü decode et
-        image_data = base64.b64decode(data['image_base64'])
+        image_base64 = data['image_base64']
+        
+        # Data URL prefix'i varsa temizle
+        if image_base64.startswith('data:'):
+            # data:image/jpeg;base64,/9j/... formatından sadece base64 kısmını al
+            image_base64 = image_base64.split(',', 1)[1]
+        
+        try:
+            image_data = base64.b64decode(image_base64)
+            print(f"✅ Base64 decode başarılı, boyut: {len(image_data)} bytes")
+        except Exception as decode_error:
+            print(f"❌ Base64 decode hatası: {decode_error}")
+            return jsonify({
+                'success': False,
+                'error': f'Base64 decode hatası: {str(decode_error)}'
+            }), 400
         
         # Geçici dosya oluştur
         filename = f"temp_{int(time.time())}.png"
