@@ -18,10 +18,12 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
+ENV GOOGLE_CLOUD_PROJECT=true
 
 RUN mkdir -p uploads processed variants
 
-# Models will be downloaded lazily on first use
+# Preload AI models during build
+RUN python preload_models.py
 
 EXPOSE 8000
 

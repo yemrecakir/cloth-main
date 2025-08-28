@@ -1,0 +1,52 @@
+# Git files
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+
+# Development
+.DS_Store
+*.log
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local test files
+uploads/
+processed/
+variants/
+test_images/
+*.jpg
+*.png
+*.jpeg
+*.bmp
+*.gif
+*.webp
+
+# Documentation that's not needed in production
+README.md
+KULLANIM.md
+PROJE_OZET.md
+
+# Local config
+.env
+config_local.json
+
+# Render specific (not needed for Cloud Run)
+render.yaml
+
+# Backup files
+*_backup.py
+*.bak
