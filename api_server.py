@@ -15,6 +15,9 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import io
 import base64
+import logging
+import json
+import traceback
 
 # HTML template'i
 INDEX_HTML = """
@@ -161,8 +164,37 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from ultra_clothing_bg_remover import UltraClothingBgRemover
 from advanced_clothing_bg_remover import AdvancedClothingBgRemover
 
+# Google Cloud Run için structured logging setup
+def setup_logging():
+    """Google Cloud Run için structured logging kur"""
+    # Format JSON olarak ayarla
+    formatter = logging.Formatter(
+        '{"timestamp":"%(asctime)s","severity":"%(levelname)s","message":"%(message)s","module":"%(name)s"}'
+    )
+    
+    # Console handler
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    
+    # Flask app logger
+    app_logger = logging.getLogger('api_server')
+    app_logger.setLevel(logging.INFO)
+    app_logger.addHandler(handler)
+    
+    # Root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    if not root_logger.handlers:
+        root_logger.addHandler(handler)
+    
+    return app_logger
+
 app = Flask(__name__)
 CORS(app)  # iOS'tan istek gelebilsin
+
+# Logging setup
+logger = setup_logging()
+logger.info("🚀 API Server başlatılıyor...")
 
 # Konfigürasyon
 UPLOAD_FOLDER = 'uploads'
@@ -184,11 +216,12 @@ def get_ultra_remover():
     global ultra_remover
     if ultra_remover is None:
         try:
-            print("🤖 Ultra AI modeli yükleniyor...")
+            logger.info("🤖 Ultra AI modeli yükleniyor...")
             ultra_remover = UltraClothingBgRemover()
-            print("✅ Ultra AI modeli hazır!")
+            logger.info(f"✅ Ultra AI modeli hazır! Model: {ultra_remover.best_model}")
         except Exception as e:
-            print(f"❌ Ultra AI modeli yüklenemedi: {e}")
+            logger.error(f"❌ Ultra AI modeli yüklenemedi: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise Exception("Ultra model yüklenmedi")
     return ultra_remover
 
@@ -199,11 +232,12 @@ def get_advanced_remover():
     global advanced_remover
     if advanced_remover is None:
         try:
-            print("🤖 Advanced AI modeli yükleniyor...")
+            logger.info("🤖 Advanced AI modeli yükleniyor...")
             advanced_remover = AdvancedClothingBgRemover('u2net_cloth_seg')
-            print("✅ Advanced AI modeli hazır!")
+            logger.info(f"✅ Advanced AI modeli hazır! Model: {advanced_remover.model_name}")
         except Exception as e:
-            print(f"❌ Advanced AI modeli yüklenemedi: {e}")
+            logger.error(f"❌ Advanced AI modeli yüklenemedi: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise Exception("Advanced model yüklenmedi")
     return advanced_remover
 
@@ -473,10 +507,13 @@ def remove_background_base64():
     """
     Base64 formatında görüntü işleme (iOS için alternatif)
     """
+    logger.info("📱 Base64 API endpoint çağrıldı")
     try:
         data = request.get_json()
+        logger.info(f"Request data keys: {list(data.keys()) if data else 'None'}")
         
         if 'image_base64' not in data:
+            logger.warning("❌ image_base64 parametresi eksik")
             return jsonify({
                 'success': False,
                 'error': 'image_base64 parametresi gerekli'
@@ -490,11 +527,13 @@ def remove_background_base64():
             # data:image/jpeg;base64,/9j/... formatından sadece base64 kısmını al
             image_base64 = image_base64.split(',', 1)[1]
         
+        logger.info(f"Base64 string uzunluğu: {len(image_base64)} karakter")
+        
         try:
             image_data = base64.b64decode(image_base64)
-            print(f"✅ Base64 decode başarılı, boyut: {len(image_data)} bytes")
+            logger.info(f"✅ Base64 decode başarılı, boyut: {len(image_data)} bytes")
         except Exception as decode_error:
-            print(f"❌ Base64 decode hatası: {decode_error}")
+            logger.error(f"❌ Base64 decode hatası: {str(decode_error)}")
             return jsonify({
                 'success': False,
                 'error': f'Base64 decode hatası: {str(decode_error)}'
@@ -504,8 +543,12 @@ def remove_background_base64():
         filename = f"temp_{int(time.time())}.png"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         
+        logger.info(f"💾 Geçici dosya oluşturuluyor: {filepath}")
+        
         with open(filepath, 'wb') as f:
             f.write(image_data)
+            
+        logger.info(f"✅ Dosya yazıldı: {os.path.getsize(filepath)} bytes")
         
         # Parametreler
         model_type = data.get('model', 'ultra')
@@ -513,50 +556,72 @@ def remove_background_base64():
         enhance = data.get('enhance', False)  # Şeffaf PNG için false
         create_variants = data.get('create_variants', False)
         
-        print(f"📱 Base64 işlem: model={model_type}, positioning={positioning}")
+        logger.info(f"⚙️ İşlem parametreleri: model={model_type}, positioning={positioning}, enhance={enhance}")
         
         start_time = time.time()
         
         # İşlem
-        if model_type == 'ultra':
-            options = {
-                'ai_positioning': True,
-                'enhance': enhance,
-                'create_variants': create_variants,
-                'positioning_mode': positioning
-            }
-            remover = get_ultra_remover()
-            result_path = remover.ultra_process(filepath, options)
-            used_model = remover.best_model
-        else:
-            options = {
-                'preprocess': True,
-                'fix_positioning': True,
-                'center_vertically': positioning == 'center',
-                'enhance': enhance,
-                'create_variants': create_variants,
-                'add_padding': True
-            }
-            remover = get_advanced_remover()
-            result_path = remover.process_clothing_complete(filepath, options)
-            used_model = remover.model_name
+        try:
+            if model_type == 'ultra':
+                logger.info("🚀 Ultra model ile işlem başlatılıyor...")
+                options = {
+                    'ai_positioning': True,
+                    'enhance': enhance,
+                    'create_variants': create_variants,
+                    'positioning_mode': positioning
+                }
+                remover = get_ultra_remover()
+                logger.info(f"✅ Ultra remover hazır, model: {remover.best_model}")
+                result_path = remover.ultra_process(filepath, options)
+                used_model = remover.best_model
+                logger.info(f"📁 Ultra işlem tamamlandı: {result_path}")
+            else:
+                logger.info("🚀 Advanced model ile işlem başlatılıyor...")
+                options = {
+                    'preprocess': True,
+                    'fix_positioning': True,
+                    'center_vertically': positioning == 'center',
+                    'enhance': enhance,
+                    'create_variants': create_variants,
+                    'add_padding': True
+                }
+                remover = get_advanced_remover()
+                logger.info(f"✅ Advanced remover hazır, model: {remover.model_name}")
+                result_path = remover.process_clothing_complete(filepath, options)
+                used_model = remover.model_name
+                logger.info(f"📁 Advanced işlem tamamlandı: {result_path}")
+                
+        except Exception as model_error:
+            logger.error(f"❌ Model işlem hatası: {str(model_error)}")
+            logger.error(f"Model traceback: {traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'error': f'Model işlem hatası: {str(model_error)}'
+            }), 500
         
         process_time = time.time() - start_time
         
         if not result_path or not os.path.exists(result_path):
+            logger.error(f"❌ İşlem sonucu bulunamadı: {result_path}")
             return jsonify({
                 'success': False,
                 'error': 'İşlem başarısız'
             }), 500
         
+        logger.info(f"📄 Sonuç dosyası okunuyor: {result_path}")
+        
         # Sonucu base64'e çevir
         with open(result_path, 'rb') as f:
-            result_base64 = base64.b64encode(f.read()).decode('utf-8')
+            result_data = f.read()
+            result_base64 = base64.b64encode(result_data).decode('utf-8')
+            
+        logger.info(f"✅ Base64 encode tamamlandı, sonuç boyutu: {len(result_data)} bytes")
         
         # Geçici dosyaları temizle
         for temp_file in [filepath, result_path]:
             if os.path.exists(temp_file):
                 os.remove(temp_file)
+                logger.info(f"🗑️ Geçici dosya silindi: {temp_file}")
         
         response_data = {
             'success': True,
@@ -569,11 +634,12 @@ def remove_background_base64():
             }
         }
         
-        print(f"📱 Base64 işlem başarılı: {process_time:.2f}s")
+        logger.info(f"✅ Base64 işlem başarılı: {process_time:.2f}s, model: {used_model}")
         return jsonify(response_data)
         
     except Exception as e:
-        print(f"❌ Base64 API hatası: {str(e)}")
+        logger.error(f"❌ Base64 API genel hatası: {str(e)}")
+        logger.error(f"Genel traceback: {traceback.format_exc()}")
         return jsonify({
             'success': False,
             'error': str(e)
