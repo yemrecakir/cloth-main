@@ -1,0 +1,47 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/cloth-bg-remover:$COMMIT_SHA'
+      - '.'
+    timeout: 1800s  # 30 minutes for model downloads
+
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/cloth-bg-remover:$COMMIT_SHA'
+
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'cloth-bg-remover'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/cloth-bg-remover:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '900'
+      - '--max-instances'
+      - '10'
+
+images:
+  - 'gcr.io/$PROJECT_ID/cloth-bg-remover:$COMMIT_SHA'
+
+options:
+  machineType: 'E2_HIGHCPU_8'  # More CPU for model downloads
+  diskSizeGb: 20
+
+timeout: 2400s  # 40 minutes total timeout

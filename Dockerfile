@@ -18,6 +18,7 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
+ENV GOOGLE_CLOUD_PROJECT=true
 
 RUN mkdir -p uploads processed variants
 
