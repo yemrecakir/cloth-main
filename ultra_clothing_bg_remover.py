@@ -12,6 +12,11 @@ import numpy as np
 from rembg import remove, new_session
 import cv2
 import time
+import logging
+import traceback
+
+# Logger setup
+logger = logging.getLogger(__name__)
 
 class UltraClothingBgRemover:
     def __init__(self):
@@ -55,7 +60,7 @@ class UltraClothingBgRemover:
         """
         Sistemde mevcut olan en iyi modeli otomatik seç
         """
-        print("🔍 En iyi model aranıyor...")
+        logger.info("🔍 En iyi model aranıyor...")
         
         # Öncelik sırası: kalite * kıyafet_skoru
         model_scores = {}
@@ -70,24 +75,25 @@ class UltraClothingBgRemover:
         
         for model_name, score in sorted_models:
             try:
-                print(f"🧪 Test ediliyor: {model_name} (skor: {score:.1f})")
+                logger.info(f"🧪 Test ediliyor: {model_name} (skor: {score:.1f})")
                 self.session = new_session(model_name)
                 self.best_model = model_name
-                print(f"✅ Seçildi: {model_name}")
-                print(f"📋 {self.premium_models[model_name]['description']}")
+                logger.info(f"✅ Seçildi: {model_name}")
+                logger.info(f"📋 {self.premium_models[model_name]['description']}")
                 return
             except Exception as e:
-                print(f"❌ {model_name} yüklenemedi: {e}")
+                logger.warning(f"❌ {model_name} yüklenemedi: {e}")
                 continue
         
         # Hiçbiri çalışmazsa son çare
-        print("⚠️  Premium modeller yüklenemedi, varsayılan kullanılıyor...")
+        logger.warning("⚠️  Premium modeller yüklenemedi, varsayılan kullanılıyor...")
         try:
             self.session = new_session('u2net')
             self.best_model = 'u2net'
-            print("✅ u2net modeli fallback olarak yüklendi")
+            logger.info("✅ u2net modeli fallback olarak yüklendi")
         except Exception as e:
-            print(f"❌ KRITIK: u2net modeli bile yüklenemedi: {e}")
+            logger.error(f"❌ KRITIK: u2net modeli bile yüklenemedi: {e}")
+            logger.error(f"Model yükleme traceback: {traceback.format_exc()}")
             self.session = None
             self.best_model = 'simple_ultra'
     
@@ -135,12 +141,12 @@ class UltraClothingBgRemover:
         Ultra gelişmiş arka plan kaldırma
         """
         try:
-            print(f"\n🚀 ULTRA İŞLEM: {os.path.basename(input_path)}")
-            print(f"🤖 Model: {self.best_model}")
+            logger.info(f"🚀 ULTRA İŞLEM: {os.path.basename(input_path)}")
+            logger.info(f"🤖 Model: {self.best_model}")
             
             # Session kontrolü
             if self.session is None:
-                print("⚠️  Rembg session bulunamadı, basit işlem yapılıyor...")
+                logger.warning("⚠️  Rembg session bulunamadı, basit işlem yapılıyor...")
                 return self.simple_background_removal(input_path, output_path)
             
             start_time = time.time()
@@ -155,10 +161,11 @@ class UltraClothingBgRemover:
             input_data = img_byte_arr.getvalue()
             
             # Arka planı kaldır
-            print("🧠 AI model çalışıyor...")
+            logger.info("🧠 AI model çalışıyor...")
             output_data = remove(input_data, session=self.session)
             
             process_time = time.time() - start_time
+            logger.info(f"⏱️ Model işlem süresi: {process_time:.2f} saniye")
             
             # Çıktı dosyası
             if output_path is None:
@@ -169,15 +176,16 @@ class UltraClothingBgRemover:
             with open(output_path, 'wb') as f:
                 f.write(output_data)
             
-            print(f"✅ Tamamlandı: {process_time:.2f} saniye")
-            print(f"📁 Çıktı: {output_path}")
+            logger.info(f"✅ Tamamlandı: {process_time:.2f} saniye")
+            logger.info(f"📁 Çıktı: {output_path}")
             
             return str(output_path)
             
         except Exception as e:
-            print(f"❌ Ultra işlem hatası: {e}")
+            logger.error(f"❌ Ultra işlem hatası: {e}")
+            logger.error(f"Ultra traceback: {traceback.format_exc()}")
             # Fallback olarak basit işlem dene
-            print("🔄 Fallback basit işlem deneniyor...")
+            logger.info("🔄 Fallback basit işlem deneniyor...")
             return self.simple_background_removal(input_path, output_path)
     
     def simple_background_removal(self, input_path, output_path=None):
@@ -185,7 +193,7 @@ class UltraClothingBgRemover:
         Basit arka plan kaldırma - session olmadan
         """
         try:
-            print(f"🔧 Basit işlem: {os.path.basename(input_path)}")
+            logger.info(f"🔧 Basit işlem: {os.path.basename(input_path)}")
             
             # Session olmadan varsayılan modeli kullan
             with open(input_path, 'rb') as f:
@@ -203,11 +211,12 @@ class UltraClothingBgRemover:
             with open(output_path, 'wb') as f:
                 f.write(output_data)
             
-            print(f"✅ Basit işlem tamamlandı: {output_path}")
+            logger.info(f"✅ Basit işlem tamamlandı: {output_path}")
             return str(output_path)
             
         except Exception as e:
-            print(f"❌ Basit işlem de başarısız: {e}")
+            logger.error(f"❌ Basit işlem de başarısız: {e}")
+            logger.error(f"Simple removal traceback: {traceback.format_exc()}")
             return None
     
     def ai_positioning(self, image_path, output_path=None, mode='smart'):
