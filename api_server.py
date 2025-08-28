@@ -183,9 +183,13 @@ def get_ultra_remover():
     """
     global ultra_remover
     if ultra_remover is None:
-        print("🤖 Ultra AI modeli yükleniyor...")
-        ultra_remover = UltraClothingBgRemover()
-        print("✅ Ultra AI modeli hazır!")
+        try:
+            print("🤖 Ultra AI modeli yükleniyor...")
+            ultra_remover = UltraClothingBgRemover()
+            print("✅ Ultra AI modeli hazır!")
+        except Exception as e:
+            print(f"❌ Ultra AI modeli yüklenemedi: {e}")
+            raise Exception("Ultra model yüklenmedi")
     return ultra_remover
 
 def get_advanced_remover():
@@ -194,9 +198,13 @@ def get_advanced_remover():
     """
     global advanced_remover
     if advanced_remover is None:
-        print("🤖 Advanced AI modeli yükleniyor...")
-        advanced_remover = AdvancedClothingBgRemover('u2net_cloth_seg')
-        print("✅ Advanced AI modeli hazır!")
+        try:
+            print("🤖 Advanced AI modeli yükleniyor...")
+            advanced_remover = AdvancedClothingBgRemover('u2net_cloth_seg')
+            print("✅ Advanced AI modeli hazır!")
+        except Exception as e:
+            print(f"❌ Advanced AI modeli yüklenemedi: {e}")
+            raise Exception("Advanced model yüklenmedi")
     return advanced_remover
 
 def allowed_file(filename):
@@ -324,7 +332,7 @@ def remove_background():
         start_time = time.time()
         
         # Model seçimi ve işlem
-        if model_type == 'ultra' and ultra_remover:
+        if model_type == 'ultra':
             options = {
                 'ai_positioning': True,
                 'enhance': enhance,
@@ -495,7 +503,7 @@ def remove_background_base64():
         start_time = time.time()
         
         # İşlem
-        if model_type == 'ultra' and ultra_remover:
+        if model_type == 'ultra':
             options = {
                 'ai_positioning': True,
                 'enhance': enhance,
